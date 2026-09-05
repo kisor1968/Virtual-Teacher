@@ -181,28 +181,60 @@ def safe_chat_send_message(chat_session, message_text):
 
 def generate_quiz_content(topic, client, language):
     prompt = (
-        f"Generate a 3-question multiple-choice quiz in {language} on the topic: '{topic}'. "
-        "Return the output STRICTLY as a valid JSON array of objects. Each object must have: "
+        f"Generate exactly 3 multiple-choice questions in {language} on the topic: '{topic}'. "
+        "Return the output STRICTLY as a valid JSON array of 3 objects. Each object must have: "
         "'question' (string), 'options' (list of 4 strings), and 'answer' (the exact correct string from the options). "
         "Do not include any extra commentary or text outside the JSON array."
     )
     try:
         response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
         text = response.text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-        return json.loads(text)
+        # Clean potential code blocks or extraneous text
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+            
+        start_idx = text.find('[')
+        end_idx = text.rfind(']')
+        if start_idx != -1 and end_idx != -1:
+            text = text[start_idx:end_idx+1]
+            
+        parsed_data = json.loads(text)
+        if isinstance(parsed_data, list) and len(parsed_data) > 0:
+            return parsed_data[:3]
     except Exception:
-        return [
-            {
-                "question": f"What is a foundational aspect of {topic}?",
-                "options": ["Core principles", "Unrelated concepts", "Arbitrary data", "None of the above"],
-                "answer": "Core principles"
-            }
-        ]
+        pass
+        
+    # Robust fallback guaranteeing 3 structured questions
+    return [
+        {
+            "question": f"What is a foundational principle of {topic}?",
+            "options": ["Core fundamentals", "Unrelated concepts", "Arbitrary noise", "None of the above"],
+            "answer": "Core fundamentals"
+        },
+        {
+            "question": f"Which of the following best characterizes {topic}?",
+            "options": ["Systematic analysis", "Random occurrence", "Static state", "Undefined behavior"],
+            "answer": "Systematic analysis"
+        },
+        {
+            "question": f"Why is understanding {topic} important?",
+            "options": ["For advanced application", "It has no practical use", "Only for historical records", "It is entirely theoretical"],
+            "answer": "For advanced application"
+        }
+    ]
+
+def generate_homework_prompt(topic, client, language):
+    prompt = (
+        f"As an expert professor, create a thoughtful homework assignment task or problem for students learning about '{topic}' in {language}. "
+        "Provide a clear, concise prompt or question that the student needs to answer."
+    )
+    try:
+        response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
+        return response.text.strip()
+    except Exception:
+        return f"Explain the core concepts of {topic} and provide a real-world example of its application."
 
 def render_and_cache_plot(user_query, client, plot_key):
     if "persisted_plots" not in st.session_state:
@@ -371,7 +403,7 @@ with st.sidebar:
         """
         1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
         2. **Knowledge Check:** Test understanding using the generated lesson quizzes.
-        3. **Assignment Evaluator:** Evaluate student homework submissions against teacher prompts.
+        3. **Assignment Evaluator:** Have the AI assign homework and evaluate your submission.
         4. **Export Notes:** Download complete lecture transcripts as text files.
         """
     )
@@ -433,6 +465,8 @@ if "current_topic" not in st.session_state:
     st.session_state.current_topic = ""
 if "quiz_data" not in st.session_state:
     st.session_state.quiz_data = None
+if "homework_prompt" not in st.session_state:
+    st.session_state.homework_prompt = ""
 
 # ==========================================
 # Main App Layout (Single Immersive Flow with Quiz & Homework stacked vertically)
@@ -451,6 +485,7 @@ if start_class:
         st.session_state.messages = []
         st.session_state.transcript_log = []
         st.session_state.quiz_data = None
+        st.session_state.homework_prompt = ""
         
         with st.spinner("Preparing lesson..."):
             try:
@@ -581,31 +616,44 @@ if st.session_state.messages:
 # Vertical Section 2: Homework & Assignment Evaluator
 # ==========================================
 st.markdown("---")
-st.subheader("📝 Homework & Assignment Evaluator")
-st.markdown("Enter the teacher's task/question and the student's answer submission below to generate an AI evaluation report, grade, and constructive feedback.")
+st.subheader("📝 AI Homework & Assignment Evaluator")
+st.markdown("The virtual tutor will assign a homework task based on today's lesson. Submit your answer below to receive an evaluation report, grade, and constructive feedback.")
+
+if st.button("Get Homework Task from Tutor"):
+    if not st.session_state.current_topic:
+        st.warning("Please start a class first so the tutor knows what topic to assign homework on.")
+    else:
+        with st.spinner("Tutor is preparing your assignment..."):
+            st.session_state.homework_prompt = generate_homework_prompt(
+                st.session_state.current_topic,
+                st.session_state.client,
+                selected_language
+            )
+
+if st.session_state.homework_prompt:
+    st.info(f"**Assigned Task:**\n\n{st.session_state.homework_prompt}")
 
 with st.form("assignment_eval_form"):
-    eval_title = st.text_input("Assignment Title / Subject", placeholder="e.g., Classical Mechanics")
-    eval_prompt = st.text_area("Teacher's Assigned Task / Question", placeholder="e.g., What is the goal of classical mechanics?")
-    student_submission = st.text_area("Student's Answer / Submission", placeholder="e.g., The goal is to study the macroscopic system and its behaviour.")
-    
-    submit_evaluation = st.form_submit_button("Evaluate Assignment 📋")
+    student_submission = st.text_area("Your Answer / Submission", placeholder="Type your detailed answer here...")
+    submit_evaluation = st.form_submit_button("Submit Answer for Evaluation 📋")
 
     if submit_evaluation:
         if "client" not in st.session_state:
             st.error("Client not initialized. Check your API key configuration.")
-        elif not eval_prompt or not student_submission:
-            st.warning("Please provide both the teacher's assigned task and the student's answer.")
+        elif not st.session_state.homework_prompt:
+            st.warning("Please click 'Get Homework Task from Tutor' first to receive your assignment.")
+        elif not student_submission:
+            st.warning("Please provide your answer submission.")
         else:
             with st.spinner("Evaluating student response..."):
                 try:
                     eval_query = (
-                        f"Act as an expert professor evaluating a student submission for the assignment titled '{eval_title}' in {selected_language}.\n\n"
-                        f"TEACHER'S ASSIGNED TASK / QUESTION:\n{eval_prompt}\n\n"
-                        f"STUDENT'S ANSWER / SUBMISSION:\n{student_submission}\n\n"
+                        f"Act as an expert professor evaluating a student submission for the topic '{st.session_state.current_topic}' in {selected_language}.\n\n"
+                        f"ASSIGNED TASK:\n{st.session_state.homework_prompt}\n\n"
+                        f"STUDENT'S SUBMISSION:\n{student_submission}\n\n"
                         "Provide a comprehensive evaluation structured as follows:\n"
                         "1. **Score / Grade**: (e.g., Score: 85/100 or Letter Grade A/B/C)\n"
-                        "2. **Executive Summary**: A brief overview of how well the student's answer addressed the teacher's task.\n"
+                        "2. **Executive Summary**: A brief overview of how well the student's answer addressed the task.\n"
                         "3. **Strengths**: What the student answered correctly or explained well.\n"
                         "4. **Areas for Improvement**: Specific gaps, omissions, or conceptual inaccuracies in the answer.\n"
                         "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how the student can improve their understanding."
