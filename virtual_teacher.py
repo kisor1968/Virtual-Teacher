@@ -191,4 +191,35 @@ def generate_quiz_content(topic, client, language):
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
-        if text.endswith("
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        return json.loads(text)
+    except Exception:
+        return [
+            {
+                "question": f"What is a foundational aspect of {topic}?",
+                "options": ["Core principles", "Unrelated concepts", "Arbitrary data", "None of the above"],
+                "answer": "Core principles"
+            }
+        ]
+
+def render_and_cache_plot(user_query, client, plot_key):
+    if "persisted_plots" not in st.session_state:
+        st.session_state.persisted_plots = {}
+
+    if plot_key in st.session_state.persisted_plots:
+        cached_type, cached_data = st.session_state.persisted_plots[plot_key]
+        if cached_type == "plotly":
+            st.plotly_chart(cached_data, use_container_width=True)
+        else:
+            st.pyplot(cached_data)
+        return
+
+    query_lower = user_query.lower()
+    is_3d = any(k in query_lower for k in ["3d", "surface", "three-dimensional", "three dimensional", "z("])
+    
+    safe_globals = {
+        "np": np, "plt": plt, "go": go, "sp": sp,
+        "k_B": 1.380649e-23, "kB": 1.380649e-23, 
+        "R": 8.314, "h": 6.626070
