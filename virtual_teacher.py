@@ -197,4 +197,4 @@ def render_and_cache_plot(user_query, client, plot_key):
                 pass
 
             try:
-                code_match = re.search(r"""```python\s*(.*?)\s*""", text, re.DOTALL)
+                code_match = re.search(r"```python\s*(.*?)\s*
