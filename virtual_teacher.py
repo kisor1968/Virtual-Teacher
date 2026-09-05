@@ -189,7 +189,6 @@ def generate_quiz_content(topic, client, language):
     try:
         response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
         text = response.text.strip()
-        # Clean potential code blocks or extraneous text
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:
@@ -201,12 +200,13 @@ def generate_quiz_content(topic, client, language):
             text = text[start_idx:end_idx+1]
             
         parsed_data = json.loads(text)
-        if isinstance(parsed_data, list) and len(parsed_data) > 0:
+        # Strictly require at least 3 questions
+        if isinstance(parsed_data, list) and len(parsed_data) >= 3:
             return parsed_data[:3]
     except Exception:
         pass
         
-    # Robust fallback guaranteeing 3 structured questions
+    # Guaranteed 3-question fallback
     return [
         {
             "question": f"What is a foundational principle of {topic}?",
@@ -402,7 +402,7 @@ with st.sidebar:
     st.markdown(
         """
         1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
-        2. **Knowledge Check:** Test understanding using the generated lesson quizzes.
+        2. **Knowledge Check:** Test understanding using the generated 3-question lesson quizzes.
         3. **Assignment Evaluator:** Have the AI assign homework and evaluate your submission.
         4. **Export Notes:** Download complete lecture transcripts as text files.
         """
@@ -561,14 +561,14 @@ if st.session_state.messages:
                     st.error(f"Error generating response (Quota / Rate limit reached): {e}")
 
     # ==========================================
-    # Vertical Section 1: Knowledge Check & Quiz
+    # Vertical Section 1: Knowledge Check & Quiz (Guaranteed 3 Questions)
     # ==========================================
     st.markdown("---")
     st.subheader("🧠 Knowledge Check & Quiz")
     st.markdown("Test your understanding based on what was just taught in today's class!")
 
     if st.button("Generate Quiz for this Lesson"):
-        with st.spinner("Generating quiz questions..."):
+        with st.spinner("Generating 3 quiz questions..."):
             st.session_state.quiz_data = generate_quiz_content(
                 st.session_state.current_topic, 
                 st.session_state.client, 
@@ -613,7 +613,7 @@ if st.session_state.messages:
                 st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
 
 # ==========================================
-# Vertical Section 2: Homework & Assignment Evaluator
+# Vertical Section 2: Homework & Assignment Evaluator (Tutor-Assigned)
 # ==========================================
 st.markdown("---")
 st.subheader("📝 AI Homework & Assignment Evaluator")
