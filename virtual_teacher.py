@@ -27,10 +27,33 @@ st.set_page_config(
 # ==========================================
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-if "visitor_count" not in st.session_state:
-    st.session_state.visitor_count = 1428
-
 FEEDBACK_FILE = "feedback_database.json"
+VISITOR_FILE = "visitor_counter.json"
+
+# Dynamic Visitor Counter Logic
+if "visited" not in st.session_state:
+    st.session_state.visited = True
+    if os.path.exists(VISITOR_FILE):
+        try:
+            with open(VISITOR_FILE, "r") as f:
+                data = json.load(f)
+                visitor_count = data.get("count", 1428) + 1
+        except Exception:
+            visitor_count = 1429
+    else:
+        visitor_count = 1429
+    
+    with open(VISITOR_FILE, "w") as f:
+        json.dump({"count": visitor_count}, f)
+else:
+    if os.path.exists(VISITOR_FILE):
+        try:
+            with open(VISITOR_FILE, "r") as f:
+                visitor_count = json.load(f).get("count", 1428)
+        except Exception:
+            visitor_count = 1428
+    else:
+        visitor_count = 1428
 
 def load_feedback():
     if os.path.exists(FEEDBACK_FILE):
@@ -491,7 +514,7 @@ st.markdown(
 )
 st.markdown(
     f"<div style='text-align: center; color: #888; font-size: 0.8em; margin-top: 5px;'>"
-    f"👀 Total Visitors: <b>{st.session_state.visitor_count}</b>"
+    f"👀 Total Visitors: <b>{visitor_count}</b>"
     f"</div>",
     unsafe_allow_html=True
 )
