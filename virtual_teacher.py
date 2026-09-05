@@ -39,9 +39,9 @@ if "visited" not in st.session_state:
                 data = json.load(f)
                 visitor_count = data.get("count", 0) + 1
         except Exception:
-            visitor_count = 1429
+            visitor_count = 0
     else:
-        visitor_count = 1429
+        visitor_count = 0
     
     with open(VISITOR_FILE, "w") as f:
         json.dump({"count": visitor_count}, f)
@@ -51,9 +51,9 @@ else:
             with open(VISITOR_FILE, "r") as f:
                 visitor_count = json.load(f).get("count", 1428)
         except Exception:
-            visitor_count = 1428
+            visitor_count = 0
     else:
-        visitor_count = 1428
+        visitor_count = 0
 
 def load_feedback():
     if os.path.exists(FEEDBACK_FILE):
