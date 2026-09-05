@@ -249,7 +249,7 @@ def render_and_cache_plot(user_query, client, plot_key):
                 plt.close(fig_obj)
 
 # ==========================================
-# 5. App Header & College Branding with Logo (Single-Line Caption & Shifted Right)
+# 5. App Header & College Branding with Logo (Centered Subtitle & Right Logo)
 # ==========================================
 col_title, col_logo = st.columns([5, 1])
 
@@ -258,7 +258,7 @@ with col_title:
         """
         <div style='text-align: left; margin-bottom: 15px;'>
             <h1 style='color: #0288d1; font-size: 2.3em; margin-bottom: 5px;'>🎓 Universal AI Virtual Classroom</h1>
-            <p style='color: #0288d1; font-size: 1.25em; font-weight: 500; margin-top: 0; margin-bottom: 10px; white-space: nowrap;'>One platform, endless e‑learning possibilities</p>
+            <p style='color: #0288d1; font-size: 1.25em; font-weight: 500; margin-top: 0; margin-bottom: 10px; text-align: center; white-space: nowrap;'>One platform, endless e‑learning possibilities</p>
             <p style='color: #555; font-size: 0.9em; margin: 0;'><b>Maintained by:</b> Prabhu Jagatbandhu College, Andul-Mouri, Howrah, Pin- 711302</p>
         </div>
         """,
