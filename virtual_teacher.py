@@ -279,7 +279,7 @@ with col_logo:
 # ==========================================
 with st.sidebar:
     st.header("Configuration")
-    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi", "Spanish", "French", "German"])
+    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi"])
     enable_audio = st.checkbox("Enable Audio Narration", value=True)
 
     st.markdown("---")
