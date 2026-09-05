@@ -249,17 +249,16 @@ def render_and_cache_plot(user_query, client, plot_key):
                 plt.close(fig_obj)
 
 # ==========================================
-# 5. App Header & College Branding with Logo (After set_page_config)
+# 5. App Header & College Branding with Logo (Single-Line Caption & Shifted Right)
 # ==========================================
-logo_path = "logo_pjc.png"
-col_title, col_logo = st.columns([4, 1])
+col_title, col_logo = st.columns([5, 1])
 
 with col_title:
     st.markdown(
         """
         <div style='text-align: left; margin-bottom: 15px;'>
             <h1 style='color: #0288d1; font-size: 2.3em; margin-bottom: 5px;'>🎓 Universal AI Virtual Classroom</h1>
-            <p style='color: #0288d1; font-size: 1.25em; font-weight: 500; margin-top: 0; margin-bottom: 10px;'>One platform, endless e‑learning possibilities</p>
+            <p style='color: #0288d1; font-size: 1.25em; font-weight: 500; margin-top: 0; margin-bottom: 10px; white-space: nowrap;'>One platform, endless e‑learning possibilities</p>
             <p style='color: #555; font-size: 0.9em; margin: 0;'><b>Maintained by:</b> Prabhu Jagatbandhu College, Andul-Mouri, Howrah, Pin- 711302</p>
         </div>
         """,
@@ -267,10 +266,13 @@ with col_title:
     )
 
 with col_logo:
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=110)
+    possible_names = ["logo_pjc.png", "logo_pjc.jpg", "logo.png", "logo.jpg"]
+    found_logo = next((p for p in possible_names if os.path.exists(p)), None)
+    
+    if found_logo:
+        st.image(found_logo, width=100)
     else:
-        st.markdown("<p style='color: #888; font-size: 0.8em;'>(Logo missing)</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #d9534f; font-size: 0.8em;'><b>⚠️ Logo file not found.</b></p>", unsafe_allow_html=True)
 
 # ==========================================
 # 6. Sidebar Configuration & User Manual
