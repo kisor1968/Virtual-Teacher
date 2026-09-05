@@ -198,7 +198,7 @@ def render_and_cache_plot(user_query, client, plot_key):
 
             try:
                 code_match = re.search(r"```python\s*(.*?)\s*```", code_text or "", re.DOTALL)
-                plt.close('all') # Clear existing figures
+                plt.close('all')
                 
                 if code_match:
                     exec_code = code_match.group(1)
@@ -247,20 +247,22 @@ def render_and_cache_plot(user_query, client, plot_key):
                 plt.close(fig_obj)
 
 # ==========================================
-# App Header & College Branding
+# App Header & College Branding (Custom Styled)
 # ==========================================
-st.title("🎓 Universal AI Virtual Classroom")
 st.markdown(
-    "<p style='color: #444; font-size: 0.95em; margin-bottom: 20px;'>"
-    "<b>One platform, endless e‑learning possibilities</b><br>"
-    "<i>Maintained by: Prabhu Jagatbandhu College, Andul-Mouri, Howrah, Pin- 711302</i>"
-    "</p>",
+    """
+    <div style='text-align: center; margin-bottom: 25px;'>
+        <h1 style='color: #0288d1; font-size: 2.3em; margin-bottom: 5px;'>🎓 Universal AI Virtual Classroom</h1>
+        <p style='color: #444; font-size: 1.1em; margin-top: 0; margin-bottom: 10px;'>One platform, endless e‑learning possibilities</p>
+        <p style='color: #555; font-size: 0.9em; margin: 0;'><b>Maintained by:</b> Prabhu Jagatbandhu College, Andul-Mouri, Howrah, Pin- 711302</p>
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
 with st.sidebar:
     st.header("Configuration")
-    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi"])
+    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi", "Spanish", "French", "German"])
     enable_audio = st.checkbox("Enable Audio Narration", value=True)
 
     if "transcript_log" in st.session_state and len(st.session_state.transcript_log) > 0:
@@ -281,7 +283,7 @@ with st.sidebar:
 lang_code_map = {"English": "en", "Bengali": "bn", "Hindi": "hi", "Spanish": "es", "French": "fr", "German": "de"}
 tts_lang = lang_code_map.get(selected_language, "en")
 
-# Initialize client using the secrets-backed key
+# Initialize client using secrets
 if GEMINI_API_KEY:
     if "client" not in st.session_state:
         st.session_state.client = genai.Client(api_key=GEMINI_API_KEY)
