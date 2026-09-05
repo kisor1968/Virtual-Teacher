@@ -30,16 +30,15 @@ if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 1428
 
 # ==========================================
-# 3. Permanent Background Handler
+# 3. Permanent Background Handler & Custom Input Label Styling
 # ==========================================
 BG_IMAGE_PATH = "my_background.png"
 
+bg_css = ""
 if os.path.exists(BG_IMAGE_PATH):
     with open(BG_IMAGE_PATH, "rb") as image_file:
         encoded_image = base64.b64encode(image_file.read()).decode()
-    
-    custom_css = f"""
-    <style>
+    bg_css = f"""
     .stApp {{
         background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(data:image/png;base64,{encoded_image});
         background-size: cover;
@@ -47,15 +46,29 @@ if os.path.exists(BG_IMAGE_PATH):
         background-repeat: no-repeat;
         background-attachment: fixed;
     }}
-    .main .block-container {{
-        background-color: rgba(255, 255, 255, 0.92);
-        border-radius: 12px;
-        padding: 2rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }}
-    </style>
     """
-    st.markdown(custom_css, unsafe_allow_html=True)
+
+custom_css = f"""
+<style>
+{bg_css}
+.main .block-container {{
+    background-color: rgba(255, 255, 255, 0.92);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}}
+/* Target Streamlit text input labels to be deep blue */
+div[data-baseweb="input"] input, .stTextInput label p {{
+    color: #0288d1 !important;
+    font-weight: 600;
+}}
+/* Ensure answers / standard text output are black */
+.stMarkdown, p, span, li {{
+    color: #000000;
+}}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # ==========================================
 # 4. Helper Functions
@@ -249,7 +262,7 @@ def render_and_cache_plot(user_query, client, plot_key):
                 plt.close(fig_obj)
 
 # ==========================================
-# 5. App Header & College Branding with Logo (Centered Subtitle & Right Logo)
+# 5. App Header & College Branding with Logo
 # ==========================================
 col_title, col_logo = st.columns([5, 1])
 
@@ -279,7 +292,7 @@ with col_logo:
 # ==========================================
 with st.sidebar:
     st.header("Configuration")
-    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi"])
+    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi", "Spanish", "French", "German"])
     enable_audio = st.checkbox("Enable Audio Narration", value=True)
 
     st.markdown("---")
