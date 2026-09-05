@@ -37,7 +37,7 @@ if "visited" not in st.session_state:
         try:
             with open(VISITOR_FILE, "r") as f:
                 data = json.load(f)
-                visitor_count = data.get("count", 1428) + 1
+                visitor_count = data.get("count", 0) + 1
         except Exception:
             visitor_count = 1429
     else:
