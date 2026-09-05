@@ -104,12 +104,10 @@ custom_css = f"""
     padding: 2rem;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }}
-/* Target Streamlit text input labels to be deep blue */
-div[data-baseweb="input"] input, .stTextInput label p {{
+div[data-baseweb="input"] input, .stTextInput label p, .stTextArea label p {{
     color: #0288d1 !important;
     font-weight: 600;
 }}
-/* Ensure answers / standard text output are black */
 .stMarkdown, p, span, li {{
     color: #000000;
 }}
@@ -371,11 +369,10 @@ with st.sidebar:
     st.subheader("📖 User Manual & Guidelines")
     st.markdown(
         """
-        1. **Start a Class:** Type any topic, concept, or question in the main text box and click **Start Class 🚀**.
-        2. **Interactive Graphs:** Mention words like *plot*, *graph*, or *visualize* in your query to automatically generate 2D/3D visual aids.
-        3. **Knowledge Check:** Manually select your answers in the quiz section below the lesson feed to test your understanding.
-        4. **Audio Narration:** Listen to professor explanations automatically if enabled.
-        5. **Export Notes:** Download complete lecture notes as a text file anytime from the sidebar.
+        1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
+        2. **Assignment Evaluator:** Switch to the second tab to evaluate student submissions against grading rubrics.
+        3. **Knowledge Check:** Test understanding using the generated lesson quizzes.
+        4. **Export Notes:** Download complete lecture transcripts as text files.
         """
     )
 
@@ -394,9 +391,6 @@ with st.sidebar:
             key="download_lecture_notes_txt"
         )
 
-    # ==========================================
-    # Permanent Feedback & Review Section
-    # ==========================================
     st.markdown("---")
     st.subheader("⭐ Feedback & Review")
     
@@ -409,7 +403,6 @@ with st.sidebar:
             save_feedback(star_rating, comment_text)
             st.success("Review saved permanently!")
 
-    # Display All Stored Reviews Section
     all_reviews = load_feedback()
     if all_reviews:
         with st.expander(f"📋 View All Reviews ({len(all_reviews)})"):
@@ -431,6 +424,7 @@ if GEMINI_API_KEY:
 else:
     st.error("API Key not found. Please ensure `GEMINI_API_KEY` is configured in your Streamlit secrets file (`.streamlit/secrets.toml`).")
 
+# Session state initializations
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "transcript_log" not in st.session_state:
@@ -440,147 +434,187 @@ if "current_topic" not in st.session_state:
 if "quiz_data" not in st.session_state:
     st.session_state.quiz_data = None
 
-topic_input = st.text_input("What topic or question do you want to cover today?", placeholder="e.g., Teach Fermi-Dirac statistics and plot it")
-start_class = st.button("Start Class 🚀")
-
-if start_class:
-    if "client" not in st.session_state:
-        st.error("Client not initialized. Check your API key configuration.")
-    elif not topic_input:
-        st.warning("Please enter a topic.")
-    else:
-        st.session_state.current_topic = topic_input
-        st.session_state.persisted_plots = {}
-        st.session_state.messages = []
-        st.session_state.transcript_log = []
-        st.session_state.quiz_data = None
-        
-        with st.spinner("Preparing lesson..."):
-            try:
-                client = st.session_state.client
-                system_prompt = (
-                    f"You are an expert professor. Explain clearly in {selected_language}. "
-                    f"CRITICAL RULE: Never draw ASCII art or text-based diagrams in your responses."
-                )
-                st.session_state.chat_history = client.chats.create(
-                    model="gemini-3.6-flash",
-                    config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.7)
-                )
-                
-                response = safe_chat_send_message(st.session_state.chat_history, f"Start class on {topic_input}")
-                
-                bot_reply = response.text
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply, "plot_query": topic_input if should_render_plot(topic_input) else None})
-                st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
-                st.success("Class started!")
-            except Exception as e:
-                st.error(f"Error starting class (Quota or Server limit): {e}")
-
 # ==========================================
-# Inline Lecture Feed with Positioned Plots
+# Main App Layout with Tabs
 # ==========================================
-if st.session_state.messages:
-    st.markdown("---")
-    st.subheader("📖 Lecture Feed")
-    
-    for idx, message in enumerate(st.session_state.messages):
-        with st.chat_message(message["role"]):
-            display_content = clean_text_for_display(message["content"])
-            st.markdown(display_content)
+tab_class, tab_evaluator = st.tabs(["🎓 Virtual Classroom & Quiz", "📝 Homework & Assignment Evaluator"])
+
+with tab_class:
+    topic_input = st.text_input("What topic or question do you want to cover today?", placeholder="e.g., Teach Fermi-Dirac statistics and plot it")
+    start_class = st.button("Start Class 🚀")
+
+    if start_class:
+        if "client" not in st.session_state:
+            st.error("Client not initialized. Check your API key configuration.")
+        elif not topic_input:
+            st.warning("Please enter a topic.")
+        else:
+            st.session_state.current_topic = topic_input
+            st.session_state.persisted_plots = {}
+            st.session_state.messages = []
+            st.session_state.transcript_log = []
+            st.session_state.quiz_data = None
             
-            if message.get("plot_query") and "client" in st.session_state:
-                render_and_cache_plot(message["plot_query"], st.session_state.client, plot_key=f"msg_plot_{idx}")
-
-            if message["role"] == "assistant" and enable_audio and display_content:
+            with st.spinner("Preparing lesson..."):
                 try:
-                    tts = gTTS(text=clean_text_for_speech(message["content"]), lang=tts_lang, slow=False)
-                    fp = BytesIO()
-                    tts.write_to_fp(fp)
-                    fp.seek(0)
-                    st.audio(fp, format="audio/mp3")
-                except:
-                    pass
-
-    if student_answer := st.chat_input("Ask a follow-up or request plots..."):
-        st.session_state.messages.append({"role": "user", "content": student_answer, "plot_query": None})
-        st.session_state.transcript_log.append({"role": "Student", "content": student_answer})
-        
-        with st.chat_message("user"):
-            st.markdown(student_answer)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Professor is responding..."):
-                try:
-                    chat_response = safe_chat_send_message(st.session_state.chat_history, student_answer)
-                    bot_reply = chat_response.text
-                    st.markdown(clean_text_for_display(bot_reply))
-                    
-                    active_plot_q = student_answer if should_render_plot(student_answer) else None
-                    
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": bot_reply, 
-                        "plot_query": active_plot_q
-                    })
-                    st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
-                    
-                    if active_plot_q and "client" in st.session_state:
-                        render_and_cache_plot(active_plot_q, st.session_state.client, plot_key=f"msg_plot_{len(st.session_state.messages)-1}")
-                        
-                except Exception as e:
-                    st.error(f"Error generating response (Quota / Rate limit reached): {e}")
-
-    # ==========================================
-    # Interactive Quizzes & Knowledge Checks (Unchecked by default)
-    # ==========================================
-    st.markdown("---")
-    st.subheader("🧠 Knowledge Check & Quiz")
-    st.markdown("Test your understanding based on what was just taught in today's class!")
-
-    if st.button("Generate Quiz for this Lesson"):
-        with st.spinner("Generating quiz questions..."):
-            st.session_state.quiz_data = generate_quiz_content(
-                st.session_state.current_topic, 
-                st.session_state.client, 
-                selected_language
-            )
-
-    if st.session_state.quiz_data:
-        with st.form("lesson_quiz_form"):
-            user_selections = {}
-            for q_idx, q_item in enumerate(st.session_state.quiz_data):
-                st.markdown(f"**Q{q_idx+1}: {q_item['question']}**")
-                user_selections[q_idx] = {}
-                for opt_idx, option in enumerate(q_item['options']):
-                    user_selections[q_idx][option] = st.checkbox(
-                        option, 
-                        value=False, 
-                        key=f"quiz_q_{q_idx}_opt_{opt_idx}"
+                    client = st.session_state.client
+                    system_prompt = (
+                        f"You are an expert professor. Explain clearly in {selected_language}. "
+                        f"CRITICAL RULE: Never draw ASCII art or text-based diagrams in your responses."
                     )
-                st.write("")
-            
-            submit_quiz = st.form_submit_button("Submit Quiz Answers")
-            
-            if submit_quiz:
-                score = 0
-                st.markdown("### 📊 Quiz Results & Feedback")
-                for q_idx, q_item in enumerate(st.session_state.quiz_data):
-                    correct = q_item['answer']
-                    chosen_options = [opt for opt, checked in user_selections[q_idx].items() if checked]
+                    st.session_state.chat_history = client.chats.create(
+                        model="gemini-3.6-flash",
+                        config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.7)
+                    )
                     
-                    if len(chosen_options) == 0:
-                        st.warning(f"**Q{q_idx+1}:** No option selected. The correct answer was '{correct}'.")
-                    elif len(chosen_options) > 1:
-                        st.error(f"**Q{q_idx+1}:** Multiple options selected. Please select only one option per question. The correct answer was '{correct}'.")
-                    else:
-                        selected = chosen_options[0]
-                        if selected == correct:
-                            score += 1
-                            st.success(f"**Q{q_idx+1}:** Correct! You chose '{selected}'.")
-                        else:
-                            st.error(f"**Q{q_idx+1}:** Incorrect. You chose '{selected}', but the correct answer is '{correct}'.")
+                    response = safe_chat_send_message(st.session_state.chat_history, f"Start class on {topic_input}")
+                    
+                    bot_reply = response.text
+                    st.session_state.messages.append({"role": "assistant", "content": bot_reply, "plot_query": topic_input if should_render_plot(topic_input) else None})
+                    st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
+                    st.success("Class started!")
+                except Exception as e:
+                    st.error(f"Error starting class (Quota or Server limit): {e}")
+
+    # Inline Lecture Feed with Positioned Plots
+    if st.session_state.messages:
+        st.markdown("---")
+        st.subheader("📖 Lecture Feed")
+        
+        for idx, message in enumerate(st.session_state.messages):
+            with st.chat_message(message["role"]):
+                display_content = clean_text_for_display(message["content"])
+                st.markdown(display_content)
                 
-                st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
+                if message.get("plot_query") and "client" in st.session_state:
+                    render_and_cache_plot(message["plot_query"], st.session_state.client, plot_key=f"msg_plot_{idx}")
+
+                if message["role"] == "assistant" and enable_audio and display_content:
+                    try:
+                        tts = gTTS(text=clean_text_for_speech(message["content"]), lang=tts_lang, slow=False)
+                        fp = BytesIO()
+                        tts.write_to_fp(fp)
+                        fp.seek(0)
+                        st.audio(fp, format="audio/mp3")
+                    except:
+                        pass
+
+        if student_answer := st.chat_input("Ask a follow-up or request plots..."):
+            st.session_state.messages.append({"role": "user", "content": student_answer, "plot_query": None})
+            st.session_state.transcript_log.append({"role": "Student", "content": student_answer})
+            
+            with st.chat_message("user"):
+                st.markdown(student_answer)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Professor is responding..."):
+                    try:
+                        chat_response = safe_chat_send_message(st.session_state.chat_history, student_answer)
+                        bot_reply = chat_response.text
+                        st.markdown(clean_text_for_display(bot_reply))
+                        
+                        active_plot_q = student_answer if should_render_plot(student_answer) else None
+                        
+                        st.session_state.messages.append({
+                            "role": "assistant", 
+                            "content": bot_reply, 
+                            "plot_query": active_plot_q
+                        })
+                        st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
+                        
+                        if active_plot_q and "client" in st.session_state:
+                            render_and_cache_plot(active_plot_q, st.session_state.client, plot_key=f"msg_plot_{len(st.session_state.messages)-1}")
+                            
+                    except Exception as e:
+                        st.error(f"Error generating response (Quota / Rate limit reached): {e}")
+
+        # Interactive Quizzes & Knowledge Checks
+        st.markdown("---")
+        st.subheader("🧠 Knowledge Check & Quiz")
+        st.markdown("Test your understanding based on what was just taught in today's class!")
+
+        if st.button("Generate Quiz for this Lesson"):
+            with st.spinner("Generating quiz questions..."):
+                st.session_state.quiz_data = generate_quiz_content(
+                    st.session_state.current_topic, 
+                    st.session_state.client, 
+                    selected_language
+                )
+
+        if st.session_state.quiz_data:
+            with st.form("lesson_quiz_form"):
+                user_selections = {}
+                for q_idx, q_item in enumerate(st.session_state.quiz_data):
+                    st.markdown(f"**Q{q_idx+1}: {q_item['question']}**")
+                    user_selections[q_idx] = {}
+                    for opt_idx, option in enumerate(q_item['options']):
+                        user_selections[q_idx][option] = st.checkbox(
+                            option, 
+                            value=False, 
+                            key=f"quiz_q_{q_idx}_opt_{opt_idx}"
+                        )
+                    st.write("")
+                
+                submit_quiz = st.form_submit_button("Submit Quiz Answers")
+                
+                if submit_quiz:
+                    score = 0
+                    st.markdown("### 📊 Quiz Results & Feedback")
+                    for q_idx, q_item in enumerate(st.session_state.quiz_data):
+                        correct = q_item['answer']
+                        chosen_options = [opt for opt, checked in user_selections[q_idx].items() if checked]
+                        
+                        if len(chosen_options) == 0:
+                            st.warning(f"**Q{q_idx+1}:** No option selected. The correct answer was '{correct}'.")
+                        elif len(chosen_options) > 1:
+                            st.error(f"**Q{q_idx+1}:** Multiple options selected. Please select only one option per question. The correct answer was '{correct}'.")
+                        else:
+                            selected = chosen_options[0]
+                            if selected == correct:
+                                score += 1
+                                st.success(f"**Q{q_idx+1}:** Correct! You chose '{selected}'.")
+                            else:
+                                st.error(f"**Q{q_idx+1}:** Incorrect. You chose '{selected}', but the correct answer is '{correct}'.")
+                    
+                    st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
+
+with tab_evaluator:
+    st.subheader("📝 Homework & Assignment Evaluator")
+    st.markdown("Provide the assignment prompt and student submission below to generate an AI-powered evaluation report, grade, and constructive feedback.")
+
+    with st.form("assignment_eval_form"):
+        eval_title = st.text_input("Assignment Title / Subject", placeholder="e.g., Quantum Mechanics Problem Set 1")
+        eval_prompt = st.text_area("Assignment Question or Prompt / Rubric Guidelines", placeholder="Paste the exact question, problem statement, or grading rubric here...")
+        student_submission = st.text_area("Student's Submission / Answer", placeholder="Paste the student's answer or essay here...")
+        
+        submit_evaluation = st.form_submit_button("Evaluate Assignment 📋")
+
+        if submit_evaluation:
+            if "client" not in st.session_state:
+                st.error("Client not initialized. Check your API key configuration.")
+            elif not eval_prompt or not student_submission:
+                st.warning("Please provide both the assignment prompt and student submission.")
+            else:
+                with st.spinner("Evaluating submission..."):
+                    try:
+                        eval_query = (
+                            f"Act as an expert professor evaluating an assignment titled '{eval_title}' in {selected_language}.\n\n"
+                            f"ASSIGNMENT PROMPT / RUBRIC:\n{eval_prompt}\n\n"
+                            f"STUDENT SUBMISSION:\n{student_submission}\n\n"
+                            "Provide a comprehensive evaluation structured as follows:\n"
+                            "1. **Score / Grade**: (e.g., Score: 85/100 or Letter Grade A/B/C)\n"
+                            "2. **Executive Summary**: A brief overview of performance.\n"
+                            "3. **Strengths**: What the student did well.\n"
+                            "4. **Areas for Improvement**: Specific mistakes, omissions, or conceptual gaps.\n"
+                            "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how to master the topic."
+                        )
+                        eval_response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', eval_query)
+                        
+                        st.markdown("---")
+                        st.markdown("### 🏆 Evaluation Report")
+                        st.markdown(eval_response.text)
+                    except Exception as e:
+                        st.error(f"Error evaluating assignment: {e}")
 
 # ==========================================
 # Footer: Copyright & Visitor Counter
