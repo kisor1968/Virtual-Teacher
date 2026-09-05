@@ -370,7 +370,7 @@ with st.sidebar:
     st.markdown(
         """
         1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
-        2. **Assignment Evaluator:** Switch to the second tab to evaluate student submissions against grading rubrics.
+        2. **Assignment Evaluator:** Enter the teacher's task/question and the student's answer submission to generate instant AI grading and feedback.
         3. **Knowledge Check:** Test understanding using the generated lesson quizzes.
         4. **Export Notes:** Download complete lecture transcripts as text files.
         """
@@ -580,12 +580,12 @@ with tab_class:
 
 with tab_evaluator:
     st.subheader("📝 Homework & Assignment Evaluator")
-    st.markdown("Provide the assignment prompt and student submission below to generate an AI-powered evaluation report, grade, and constructive feedback.")
+    st.markdown("Enter the teacher's task/question and the student's answer submission below to generate an AI evaluation report, grade, and constructive feedback.")
 
     with st.form("assignment_eval_form"):
-        eval_title = st.text_input("Assignment Title / Subject", placeholder="e.g., Quantum Mechanics Problem Set 1")
-        eval_prompt = st.text_area("Assignment Question or Prompt / Rubric Guidelines", placeholder="Paste the exact question, problem statement, or grading rubric here...")
-        student_submission = st.text_area("Student's Submission / Answer", placeholder="Paste the student's answer or essay here...")
+        eval_title = st.text_input("Assignment Title / Subject", placeholder="e.g., Classical Mechanics")
+        eval_prompt = st.text_area("Teacher's Assigned Task / Question", placeholder="e.g., What is the goal of classical mechanics?")
+        student_submission = st.text_area("Student's Answer / Submission", placeholder="e.g., The goal is to study the macroscopic system and its behaviour.")
         
         submit_evaluation = st.form_submit_button("Evaluate Assignment 📋")
 
@@ -593,20 +593,20 @@ with tab_evaluator:
             if "client" not in st.session_state:
                 st.error("Client not initialized. Check your API key configuration.")
             elif not eval_prompt or not student_submission:
-                st.warning("Please provide both the assignment prompt and student submission.")
+                st.warning("Please provide both the teacher's assigned task and the student's answer.")
             else:
-                with st.spinner("Evaluating submission..."):
+                with st.spinner("Evaluating student response..."):
                     try:
                         eval_query = (
-                            f"Act as an expert professor evaluating an assignment titled '{eval_title}' in {selected_language}.\n\n"
-                            f"ASSIGNMENT PROMPT / RUBRIC:\n{eval_prompt}\n\n"
-                            f"STUDENT SUBMISSION:\n{student_submission}\n\n"
+                            f"Act as an expert professor evaluating a student submission for the assignment titled '{eval_title}' in {selected_language}.\n\n"
+                            f"TEACHER'S ASSIGNED TASK / QUESTION:\n{eval_prompt}\n\n"
+                            f"STUDENT'S ANSWER / SUBMISSION:\n{student_submission}\n\n"
                             "Provide a comprehensive evaluation structured as follows:\n"
                             "1. **Score / Grade**: (e.g., Score: 85/100 or Letter Grade A/B/C)\n"
-                            "2. **Executive Summary**: A brief overview of performance.\n"
-                            "3. **Strengths**: What the student did well.\n"
-                            "4. **Areas for Improvement**: Specific mistakes, omissions, or conceptual gaps.\n"
-                            "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how to master the topic."
+                            "2. **Executive Summary**: A brief overview of how well the student's answer addressed the teacher's task.\n"
+                            "3. **Strengths**: What the student answered correctly or explained well.\n"
+                            "4. **Areas for Improvement**: Specific gaps, omissions, or conceptual inaccuracies in the answer.\n"
+                            "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how the student can improve their understanding."
                         )
                         eval_response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', eval_query)
                         
