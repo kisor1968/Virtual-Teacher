@@ -29,6 +29,9 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 1428
 
+if "feedback_submitted" not in st.session_state:
+    st.session_state.feedback_submitted = False
+
 # ==========================================
 # 3. Permanent Background Handler & Custom Input Label Styling
 # ==========================================
@@ -321,6 +324,24 @@ with st.sidebar:
             mime="text/plain",
             key="download_lecture_notes_txt"
         )
+
+    # ==========================================
+    # Feedback & Review Section
+    # ==========================================
+    st.markdown("---")
+    st.subheader("⭐ Feedback & Review")
+    
+    if st.session_state.feedback_submitted:
+        st.success("Thank you for your valuable feedback!")
+    else:
+        with st.form("sidebar_feedback_form"):
+            user_rating = st.slider("Rate your experience", 1, 5, 5)
+            user_comments = st.text_area("Your Comments / Suggestions", placeholder="Tell us how we can improve...")
+            submit_feedback = st.form_submit_button("Submit Review")
+            
+            if submit_feedback:
+                st.session_state.feedback_submitted = True
+                st.rerun()
 
 lang_code_map = {"English": "en", "Bengali": "bn", "Hindi": "hi", "Spanish": "es", "French": "fr", "German": "de"}
 tts_lang = lang_code_map.get(selected_language, "en")
