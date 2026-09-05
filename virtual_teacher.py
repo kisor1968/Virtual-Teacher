@@ -160,41 +160,4 @@ def render_and_cache_plot(user_query, client, plot_key):
                 pass
             
             try:
-                code_match = re.search(r"```python\s*(.*?)\s*```", code_text or "", re.DOTALL)
-                if code_match:
-                    exec_code = code_match.group(1)
-                    local_vars = {}
-                    exec(exec_code, safe_globals, local_vars)
-                    fig = local_vars.get("fig") or safe_globals.get("fig")
-                    if fig:
-                        st.session_state.persisted_plots[plot_key] = ("plotly", fig)
-                        st.plotly_chart(fig, use_container_width=True)
-                        return
-            except Exception:
-                pass
-                
-            x = np.linspace(-5, 5, 40)
-            y = np.linspace(-5, 5, 40)
-            X, Y = np.meshgrid(x, y)
-            Z = np.sin(X) * np.cos(Y)
-            fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='Viridis')])
-            st.session_state.persisted_plots[plot_key] = ("plotly", fig)
-            st.plotly_chart(fig, use_container_width=True)
-            
-    else:
-        with st.status("Generating Universal Graph...", expanded=True):
-            code_text = None
-            try:
-                prompt = (
-                    f"Write a Python script using numpy (as np), scipy.special (as sp), and matplotlib.pyplot (as plt) "
-                    f"to create a clear 2D scientific plot with explicit axis labels, title, grid, and legend for the exact request: '{user_query}'. "
-                    "Return ONLY executable Python code inside a markdown code block. "
-                    "Use plt.figure(figsize=(8, 4), facecolor='white') and call plt.tight_layout(). Do NOT call plt.show()."
-                )
-                response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
-                code_text = response.text
-            except Exception:
-                pass
-
-            try:
                 code_match = re.search(r"```python\s*(.*?)\s*
