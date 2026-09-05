@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import json
 import base64
 import streamlit as st
 from google import genai
@@ -22,15 +23,35 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. Configuration & Session State
+# 2. Configuration & Permanent Storage Setup
 # ==========================================
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 1428
 
-if "feedback_records" not in st.session_state:
-    st.session_state.feedback_records = []
+FEEDBACK_FILE = "feedback_database.json"
+
+def load_feedback():
+    if os.path.exists(FEEDBACK_FILE):
+        try:
+            with open(FEEDBACK_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_feedback(rating, comment):
+    reviews = load_feedback()
+    new_review = {
+        "rating": rating,
+        "comment": comment,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    reviews.append(new_review)
+    with open(FEEDBACK_FILE, "w") as f:
+        json.dump(reviews, f, indent=4)
+    return reviews
 
 # ==========================================
 # 3. Permanent Background Handler & Custom Input Label Styling
@@ -326,7 +347,7 @@ with st.sidebar:
         )
 
     # ==========================================
-    # Feedback & Review Recorder Section
+    # Permanent Feedback & Review Section
     # ==========================================
     st.markdown("---")
     st.subheader("⭐ Feedback & Review")
@@ -334,19 +355,23 @@ with st.sidebar:
     with st.form("sidebar_feedback_form"):
         star_rating = st.slider("Star Rating", 1, 5, 5, format="%d ⭐")
         comment_text = st.text_area("Your Comment", placeholder="Share your experience or suggestions...")
-        submit_review = st.form_submit_button("Record Review")
+        submit_review = st.form_submit_button("Submit & Record Review")
         
         if submit_review:
-            # Record the review into session state list
-            st.session_state.feedback_records.append({
-                "rating": star_rating,
-                "comment": comment_text,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-            })
-            st.success("Review recorded successfully!")
+            save_feedback(star_rating, comment_text)
+            st.success("Review saved permanently!")
 
-    if st.session_state.feedback_records:
-        st.caption(f"📝 Total Recorded Reviews: {len(st.session_state.feedback_records)}")
+    # Display All Stored Reviews Section
+    all_reviews = load_feedback()
+    if all_reviews:
+        with st.expander(f"📋 View All Reviews ({len(all_reviews)})"):
+            for idx, rev in enumerate(reversed(all_reviews), 1):
+                stars = "⭐" * rev["rating"]
+                st.markdown(f"**#{len(all_reviews) - idx + 1} - {stars}**")
+                if rev["comment"]:
+                    st.caption(f'"{rev["comment"]}"')
+                st.text(f"🕒 {rev['timestamp']}")
+                st.divider()
 
 lang_code_map = {"English": "en", "Bengali": "bn", "Hindi": "hi", "Spanish": "es", "French": "fr", "German": "de"}
 tts_lang = lang_code_map.get(selected_language, "en")
