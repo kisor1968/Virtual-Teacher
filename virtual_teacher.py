@@ -199,4 +199,508 @@ def generate_quiz_content(topic, client, language):
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:
-            text = text.split("
+            text = text.split("```")[1].split("```")[0].strip()
+            
+        start_idx = text.find('[')
+        end_idx = text.rfind(']')
+        if start_idx != -1 and end_idx != -1:
+            text = text[start_idx:end_idx+1]
+            
+        parsed_data = json.loads(text)
+        if isinstance(parsed_data, list) and len(parsed_data) >= 3:
+            return parsed_data[:3]
+    except Exception:
+        pass
+        
+    return [
+        {
+            "question": f"What is a foundational principle of {topic}?",
+            "options": ["Core fundamentals", "Unrelated concepts", "Arbitrary noise", "None of the above"],
+            "answer": "Core fundamentals"
+        },
+        {
+            "question": f"Which of the following best characterizes {topic}?",
+            "options": ["Systematic analysis", "Random occurrence", "Static state", "Undefined behavior"],
+            "answer": "Systematic analysis"
+        },
+        {
+            "question": f"Why is understanding {topic} important?",
+            "options": ["For advanced application", "It has no practical use", "Only for historical records", "It is entirely theoretical"],
+            "answer": "For advanced application"
+        }
+    ]
+
+def generate_homework_prompt(topic, client, language):
+    prompt = (
+        f"As an expert professor, create a thoughtful homework assignment task or problem for students learning about '{topic}' in {language}. "
+        "Provide a clear, concise prompt or question that the student needs to answer."
+    )
+    try:
+        response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
+        return response.text.strip()
+    except Exception:
+        return f"Explain the core concepts of {topic} and provide a real-world example of its application."
+
+def render_and_cache_plot(user_query, client, plot_key):
+    if "persisted_plots" not in st.session_state:
+        st.session_state.persisted_plots = {}
+
+    if plot_key in st.session_state.persisted_plots:
+        cached_type, cached_data = st.session_state.persisted_plots[plot_key]
+        if cached_type == "plotly":
+            st.plotly_chart(cached_data, use_container_width=True)
+        else:
+            st.pyplot(cached_data)
+        return
+
+    query_lower = user_query.lower()
+    is_3d = any(k in query_lower for k in ["3d", "surface", "three-dimensional", "three dimensional", "z("])
+    
+    safe_globals = {
+        "np": np, "plt": plt, "go": go, "sp": sp,
+        "k_B": 1.380649e-23, "kB": 1.380649e-23, 
+        "R": 8.314, "h": 6.62607015e-34, 
+        "c": 299792458, "N_A": 6.02214076e23
+    }
+    
+    bt3 = chr(96) * 3
+    code_pattern = f"{bt3}python\\s*(.*?)\\s*{bt3}"
+
+    if is_3d:
+        with st.status("Generating 3D Surface Graph...", expanded=True):
+            code_text = None
+            try:
+                prompt = (
+                    f"Write a Python script using numpy (as np) and plotly.graph_objects (as go) "
+                    f"to create an interactive 3D surface plot precisely matching: '{user_query}'. "
+                    "Return ONLY executable Python code inside a markdown code block. "
+                    "Assign the final Plotly figure to a variable named `fig`."
+                )
+                response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
+                code_text = response.text
+            except Exception:
+                pass
+            
+            try:
+                code_match = re.search(code_pattern, code_text or "", re.DOTALL)
+                if code_match:
+                    exec_code = code_match.group(1)
+                    local_vars = {}
+                    exec(exec_code, safe_globals, local_vars)
+                    fig = local_vars.get("fig") or safe_globals.get("fig")
+                    if fig:
+                        st.session_state.persisted_plots[plot_key] = ("plotly", fig)
+                        st.plotly_chart(fig, use_container_width=True)
+                        return
+            except Exception:
+                pass
+                
+            x = np.linspace(-5, 5, 40)
+            y = np.linspace(-5, 5, 40)
+            X, Y = np.meshgrid(x, y)
+            Z = np.sin(X) * np.cos(Y)
+            fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='Viridis')])
+            st.session_state.persisted_plots[plot_key] = ("plotly", fig)
+            st.plotly_chart(fig, use_container_width=True)
+            
+    else:
+        with st.status("Generating Universal Graph...", expanded=True):
+            code_text = None
+            try:
+                prompt = (
+                    f"Write a Python script using numpy (as np), scipy.special (as sp), and matplotlib.pyplot (as plt) "
+                    f"to create a clear 2D scientific plot with explicit axis labels, title, grid, and legend for the exact request: '{user_query}'. "
+                    "Return ONLY executable Python code inside a markdown code block. "
+                    "Use plt.figure(figsize=(8, 4), facecolor='white') and call plt.tight_layout(). Do NOT call plt.show()."
+                )
+                response = safe_generate_content(client, 'gemini-3.6-flash', prompt)
+                code_text = response.text
+            except Exception:
+                pass
+
+            try:
+                code_match = re.search(code_pattern, code_text or "", re.DOTALL)
+                plt.close('all')
+                
+                if code_match:
+                    exec_code = code_match.group(1)
+                    local_vars = {}
+                    exec(exec_code, safe_globals, local_vars)
+                
+                if plt.get_fignums():
+                    fig_obj = plt.gcf()
+                    fig_obj.patch.set_facecolor('white')
+                    plt.tight_layout()
+                else:
+                    fig_obj = plt.figure(figsize=(8, 4), facecolor='white')
+                    x = np.linspace(-4, 4, 400)
+                    if "fermi" in query_lower:
+                        E_F = 0.5
+                        f_FD = 1.0 / (np.exp((x - E_F) / 0.1) + 1.0)
+                        plt.plot(x, f_FD, color='blue', lw=2, label="Fermi-Dirac")
+                        plt.title("Fermi-Dirac Distribution")
+                    elif "maxwell" in query_lower:
+                        v = np.linspace(0, 2000, 400)
+                        plt.plot(v, v**2 * np.exp(-v**2/500000), color='crimson', lw=2, label="Maxwell-Boltzmann")
+                        plt.title("Maxwell-Boltzmann Speed Distribution")
+                    else:
+                        plt.plot(x, np.sin(x), color='darkorange', lw=2, label=user_query)
+                        plt.title(f"Plot for: {user_query}")
+                    plt.grid(True, linestyle=':', alpha=0.6)
+                    plt.legend(loc='best')
+                    plt.tight_layout()
+
+                st.session_state.persisted_plots[plot_key] = ("pyplot", fig_obj)
+                st.pyplot(fig_obj)
+                plt.close(fig_obj)
+                
+            except Exception as e:
+                st.warning(f"Plotting fallback engaged: {e}")
+                fig_obj = plt.figure(figsize=(8, 4), facecolor='white')
+                x = np.linspace(-4, 4, 400)
+                plt.plot(x, np.sin(x), color='purple', lw=2, label="Fallback Plot")
+                plt.title(f"Graph: {user_query}")
+                plt.xlabel("x")
+                plt.ylabel("y")
+                plt.grid(True, linestyle=':', alpha=0.6)
+                plt.tight_layout()
+                st.session_state.persisted_plots[plot_key] = ("pyplot", fig_obj)
+                st.pyplot(fig_obj)
+                plt.close(fig_obj)
+
+# ==========================================
+# 5. App Header & College Branding with Logo
+# ==========================================
+col_title, col_logo = st.columns([5, 1])
+
+with col_title:
+    st.markdown(
+        """
+        <div style='text-align: left; margin-bottom: 15px;'>
+            <h1 style='color: #0288d1; font-size: 2.3em; margin-bottom: 5px;'>🎓 Universal AI Virtual Classroom</h1>
+            <p style='color: #0288d1; font-size: 1.25em; font-weight: 500; margin-top: 0; margin-bottom: 10px; text-align: center; white-space: nowrap;'>One platform, endless e‑learning possibilities</p>
+            <p style='color: #555; font-size: 0.9em; margin: 0;'><b>Maintained by:</b> Prabhu Jagatbandhu College, Andul-Mouri, Howrah, Pin- 711302</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with col_logo:
+    possible_names = ["logo_pjc.png", "logo_pjc.jpg", "logo.png", "logo.jpg"]
+    found_logo = next((p for p in possible_names if os.path.exists(p)), None)
+    
+    if found_logo:
+        st.image(found_logo, width=100)
+    else:
+        st.markdown("<p style='color: #d9534f; font-size: 0.8em;'><b>⚠️ Logo file not found.</b></p>", unsafe_allow_html=True)
+
+# ==========================================
+# Front-Page Importance & Why Students Should Use It
+# ==========================================
+st.markdown(
+    """
+    <div class="benefits-box">
+        <h4 style="color: #0288d1; margin-top: 0; margin-bottom: 8px;">🌟 Why Use This Virtual Classroom? (The AI Advantage)</h4>
+        <ul style="margin: 0; padding-left: 20px; font-size: 0.95em; line-height: 1.5; color: #333;">
+            <b>Structured Learning vs. Chat:</b> Unlike standard AI chatbots that just output text paragraphs, this platform structures your education with interactive lectures, automated quizzes, and active tutor evaluations.
+            <br><b>Dynamic Scientific Visualizations:</b> Automatically plots complex mathematical, physical, and statistical equations (2D & 3D) on demand.
+            <br><b>Multilingual & Accessible:</b> Supports multiple teaching languages with built-in voice narration and downloadable session notes for offline study.
+        </ul>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ==========================================
+# 6. Sidebar Configuration & User Manual
+# ==========================================
+with st.sidebar:
+    st.header("Configuration")
+    selected_language = st.selectbox("Teaching Language", ["English", "Bengali", "Hindi", "Spanish", "French", "German"])
+    enable_audio = st.checkbox("Enable Audio Narration", value=True)
+
+    st.markdown("---")
+    st.subheader("📖 User Manual & Guidelines")
+    st.markdown(
+        """
+        1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
+        2. **Knowledge Check:** Test understanding using the generated 3-question lesson quizzes.
+        3. **Assignment Evaluator:** Have the AI assign homework and evaluate your submission.
+        4. **Export Notes:** Download complete lecture transcripts as text files.
+        """
+    )
+
+    if "transcript_log" in st.session_state and len(st.session_state.transcript_log) > 0:
+        st.markdown("---")
+        st.subheader("📥 Export Class Materials")
+        lecture_transcript = f"UNIVERSAL AI VIRTUAL CLASSROOM\nTopic: {st.session_state.get('current_topic', 'General Session')}\n" + "=" * 40 + "\n\n"
+        for item in st.session_state.transcript_log:
+            lecture_transcript += f"[{item['role']}]:\n{item['content']}\n\n" + "-" * 20 + "\n\n"
+            
+        st.download_button(
+            label="Download Lecture Notes (TXT)",
+            data=lecture_transcript,
+            file_name="lecture_notes.txt",
+            mime="text/plain",
+            key="download_lecture_notes_txt"
+        )
+
+    st.markdown("---")
+    st.subheader("⭐ Feedback & Review")
+    
+    with st.form("sidebar_feedback_form"):
+        star_rating = st.slider("Star Rating", 1, 5, 5, format="%d ⭐")
+        comment_text = st.text_area("Your Comment", placeholder="Share your experience or suggestions...")
+        submit_review = st.form_submit_button("Submit & Record Review")
+        
+        if submit_review:
+            save_feedback(star_rating, comment_text)
+            st.success("Review saved permanently!")
+
+    all_reviews = load_feedback()
+    if all_reviews:
+        with st.expander(f"📋 View All Reviews ({len(all_reviews)})"):
+            for idx, rev in enumerate(reversed(all_reviews), 1):
+                stars = "⭐" * rev["rating"]
+                st.markdown(f"**#{len(all_reviews) - idx + 1} - {stars}**")
+                if rev["comment"]:
+                    st.caption(f'"{rev["comment"]}"')
+                st.text(f"🕒 {rev['timestamp']}")
+                st.divider()
+
+lang_code_map = {"English": "en", "Bengali": "bn", "Hindi": "hi", "Spanish": "es", "French": "fr", "German": "de"}
+tts_lang = lang_code_map.get(selected_language, "en")
+
+# Initialize client using secrets
+if GEMINI_API_KEY:
+    if "client" not in st.session_state:
+        st.session_state.client = genai.Client(api_key=GEMINI_API_KEY)
+else:
+    st.error("API Key not found. Please ensure `GEMINI_API_KEY` is configured in your Streamlit secrets file (`.streamlit/secrets.toml`).")
+
+# Session state initializations
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "transcript_log" not in st.session_state:
+    st.session_state.transcript_log = []
+if "current_topic" not in st.session_state:
+    st.session_state.current_topic = ""
+if "quiz_data" not in st.session_state:
+    st.session_state.quiz_data = None
+if "homework_prompt" not in st.session_state:
+    st.session_state.homework_prompt = ""
+
+# ==========================================
+# Main App Layout (Single Immersive Flow with Quiz & Homework stacked vertically)
+# ==========================================
+topic_input = st.text_input("What topic or question do you want to cover today?", placeholder="e.g., Teach Fermi-Dirac statistics and plot it")
+start_class = st.button("Start Class 🚀")
+
+if start_class:
+    if "client" not in st.session_state:
+        st.error("Client not initialized. Check your API key configuration.")
+    elif not topic_input:
+        st.warning("Please enter a topic.")
+    else:
+        st.session_state.current_topic = topic_input
+        st.session_state.persisted_plots = {}
+        st.session_state.messages = []
+        st.session_state.transcript_log = []
+        st.session_state.quiz_data = None
+        st.session_state.homework_prompt = ""
+        
+        with st.spinner("Preparing lesson..."):
+            try:
+                client = st.session_state.client
+                system_prompt = (
+                    f"You are an expert professor. Explain clearly in {selected_language}. "
+                    f"CRITICAL RULE: Never draw ASCII art or text-based diagrams in your responses."
+                )
+                st.session_state.chat_history = client.chats.create(
+                    model="gemini-3.6-flash",
+                    config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.7)
+                )
+                
+                response = safe_chat_send_message(st.session_state.chat_history, f"Start class on {topic_input}")
+                
+                bot_reply = response.text
+                st.session_state.messages.append({"role": "assistant", "content": bot_reply, "plot_query": topic_input if should_render_plot(topic_input) else None})
+                st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
+                st.success("Class started!")
+            except Exception as e:
+                st.error(f"Error starting class (Quota or Server limit): {e}")
+
+# Inline Lecture Feed with Positioned Plots
+if st.session_state.messages:
+    st.markdown("---")
+    st.subheader("📖 Lecture Feed")
+    
+    for idx, message in enumerate(st.session_state.messages):
+        with st.chat_message(message["role"]):
+            display_content = clean_text_for_display(message["content"])
+            st.markdown(display_content)
+            
+            if message.get("plot_query") and "client" in st.session_state:
+                render_and_cache_plot(message["plot_query"], st.session_state.client, plot_key=f"msg_plot_{idx}")
+
+            if message["role"] == "assistant" and enable_audio and display_content:
+                try:
+                    tts = gTTS(text=clean_text_for_speech(message["content"]), lang=tts_lang, slow=False)
+                    fp = BytesIO()
+                    tts.write_to_fp(fp)
+                    fp.seek(0)
+                    st.audio(fp, format="audio/mp3")
+                except:
+                    pass
+
+    if student_answer := st.chat_input("Ask a follow-up or request plots..."):
+        st.session_state.messages.append({"role": "user", "content": student_answer, "plot_query": None})
+        st.session_state.transcript_log.append({"role": "Student", "content": student_answer})
+        
+        with st.chat_message("user"):
+            st.markdown(student_answer)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Professor is responding..."):
+                try:
+                    chat_response = safe_chat_send_message(st.session_state.chat_history, student_answer)
+                    bot_reply = chat_response.text
+                    st.markdown(clean_text_for_display(bot_reply))
+                    
+                    active_plot_q = student_answer if should_render_plot(student_answer) else None
+                    
+                    st.session_state.messages.append({
+                        "role": "assistant", 
+                        "content": bot_reply, 
+                        "plot_query": active_plot_q
+                    })
+                    st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
+                    
+                    if active_plot_q and "client" in st.session_state:
+                        render_and_cache_plot(active_plot_q, st.session_state.client, plot_key=f"msg_plot_{len(st.session_state.messages)-1}")
+                        
+                except Exception as e:
+                    st.error(f"Error generating response (Quota / Rate limit reached): {e}")
+
+    # ==========================================
+    # Vertical Section 1: Knowledge Check & Quiz (Guaranteed 3 Questions)
+    # ==========================================
+    st.markdown("---")
+    st.subheader("🧠 Knowledge Check & Quiz")
+    st.markdown("Test your understanding based on what was just taught in today's class!")
+
+    if st.button("Generate Quiz for this Lesson"):
+        with st.spinner("Generating 3 quiz questions..."):
+            st.session_state.quiz_data = generate_quiz_content(
+                st.session_state.current_topic, 
+                st.session_state.client, 
+                selected_language
+            )
+
+    if st.session_state.quiz_data:
+        with st.form("lesson_quiz_form"):
+            user_selections = {}
+            for q_idx, q_item in enumerate(st.session_state.quiz_data):
+                st.markdown(f"**Q{q_idx+1}: {q_item['question']}**")
+                user_selections[q_idx] = {}
+                for opt_idx, option in enumerate(q_item['options']):
+                    user_selections[q_idx][option] = st.checkbox(
+                        option, 
+                        value=False, 
+                        key=f"quiz_q_{q_idx}_opt_{opt_idx}"
+                    )
+                st.write("")
+            
+            submit_quiz = st.form_submit_button("Submit Quiz Answers")
+            
+            if submit_quiz:
+                score = 0
+                st.markdown("### 📊 Quiz Results & Feedback")
+                for q_idx, q_item in enumerate(st.session_state.quiz_data):
+                    correct = q_item['answer']
+                    chosen_options = [opt for opt, checked in user_selections[q_idx].items() if checked]
+                    
+                    if len(chosen_options) == 0:
+                        st.warning(f"**Q{q_idx+1}:** No option selected. The correct answer was '{correct}'.")
+                    elif len(chosen_options) > 1:
+                        st.error(f"**Q{q_idx+1}:** Multiple options selected. Please select only one option per question. The correct answer was '{correct}'.")
+                    else:
+                        selected = chosen_options[0]
+                        if selected == correct:
+                            score += 1
+                            st.success(f"**Q{q_idx+1}:** Correct! You chose '{selected}'.")
+                        else:
+                            st.error(f"**Q{q_idx+1}:** Incorrect. You chose '{selected}', but the correct answer is '{correct}'.")
+                
+                st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
+
+# ==========================================
+# Vertical Section 2: Homework & Assignment Evaluator (Tutor-Assigned)
+# ==========================================
+st.markdown("---")
+st.subheader("📝 AI Homework & Assignment Evaluator")
+st.markdown("The virtual tutor will assign a homework task based on today's lesson. Submit your answer below to receive an evaluation report, grade, and constructive feedback.")
+
+if st.button("Get Homework Task from Tutor"):
+    if not st.session_state.current_topic:
+        st.warning("Please start a class first so the tutor knows what topic to assign homework on.")
+    else:
+        with st.spinner("Tutor is preparing your assignment..."):
+            st.session_state.homework_prompt = generate_homework_prompt(
+                st.session_state.current_topic,
+                st.session_state.client,
+                selected_language
+            )
+
+if st.session_state.homework_prompt:
+    st.info(f"**Assigned Task:**\n\n{st.session_state.homework_prompt}")
+
+with st.form("assignment_eval_form"):
+    student_submission = st.text_area("Your Answer / Submission", placeholder="Type your detailed answer here...")
+    submit_evaluation = st.form_submit_button("Submit Answer for Evaluation 📋")
+
+    if submit_evaluation:
+        if "client" not in st.session_state:
+            st.error("Client not initialized. Check your API key configuration.")
+        elif not st.session_state.homework_prompt:
+            st.warning("Please click 'Get Homework Task from Tutor' first to receive your assignment.")
+        elif not student_submission:
+            st.warning("Please provide your answer submission.")
+        else:
+            with st.spinner("Evaluating student response..."):
+                try:
+                    eval_query = (
+                        f"Act as an expert professor evaluating a student submission for the topic '{st.session_state.current_topic}' in {selected_language}.\n\n"
+                        f"ASSIGNED TASK:\n{st.session_state.homework_prompt}\n\n"
+                        f"STUDENT'S SUBMISSION:\n{student_submission}\n\n"
+                        "Provide a comprehensive evaluation structured as follows:\n"
+                        "1. **Score / Grade**: (e.g., Score: 85/100 or Letter Grade A/B/C)\n"
+                        "2. **Executive Summary**: A brief overview of how well the student's answer addressed the task.\n"
+                        "3. **Strengths**: What the student answered correctly or explained well.\n"
+                        "4. **Areas for Improvement**: Specific gaps, omissions, or conceptual inaccuracies in the answer.\n"
+                        "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how the student can improve their understanding."
+                    )
+                    eval_response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', eval_query)
+                    
+                    st.markdown("---")
+                    st.markdown("### 🏆 Evaluation Report")
+                    st.markdown(eval_response.text)
+                except Exception as e:
+                    st.error(f"Error evaluating assignment: {e}")
+
+# ==========================================
+# Footer: Copyright & Visitor Counter
+# ==========================================
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #666; font-size: 0.85em;'>"
+    "Copyright © 2026 Dr. Kisor Mukhopadhyay, Prabhu Jagatbandhu College. All rights reserved."
+    "</div>",
+    unsafe_allow_html=True
+)
+st.markdown(
+    f"<div style='text-align: center; color: #888; font-size: 0.8em; margin-top: 5px;'>"
+    f"👀 Total Visitors: <b>{visitor_count}</b>"
+    f"</div>",
+    unsafe_allow_html=True
+)
