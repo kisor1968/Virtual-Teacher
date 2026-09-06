@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special as sp
+from PIL import Image
 
 # ==========================================
 # 1. Page Configuration (MUST be first Streamlit command)
@@ -104,7 +105,7 @@ custom_css = f"""
     padding: 2rem;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }}
-div[data-baseweb="input"] input, .stTextInput label p, .stTextArea label p {{
+div[data-baseweb="input"] input, .stTextInput label p, .stTextArea label p, .stFileUploader label p {{
     color: #0288d1 !important;
     font-weight: 600;
 }}
@@ -425,7 +426,7 @@ with st.sidebar:
         """
         1. **Virtual Classroom:** Enter any subject or question to launch an interactive lecture with AI explanations and plots.
         2. **Knowledge Check:** Test understanding using the generated 3-question lesson quizzes.
-        3. **Assignment Evaluator:** Have the AI assign homework and evaluate your submission.
+        3. **Assignment Evaluator:** Have the AI assign homework and evaluate your text or uploaded files (PDF, JPG, PNG).
         4. **Export Notes:** Download complete lecture transcripts as text files.
         """
     )
@@ -635,11 +636,11 @@ if st.session_state.messages:
                 st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
 
 # ==========================================
-# Vertical Section 2: Homework & Assignment Evaluator (Tutor-Assigned)
+# Vertical Section 2: Homework & Assignment Evaluator (Tutor-Assigned with File Upload)
 # ==========================================
 st.markdown("---")
 st.subheader("📝 AI Homework & Assignment Evaluator")
-st.markdown("The virtual tutor will assign a homework task based on today's lesson. Submit your answer below to receive an evaluation report, grade, and constructive feedback.")
+st.markdown("The virtual tutor will assign a homework task based on today's lesson. Type your answer or upload a file (PDF, JPG, PNG) for evaluation.")
 
 if st.button("Get Homework Task from Tutor"):
     if not st.session_state.current_topic:
@@ -656,7 +657,9 @@ if st.session_state.homework_prompt:
     st.info(f"**Assigned Task:**\n\n{st.session_state.homework_prompt}")
 
 with st.form("assignment_eval_form"):
-    student_submission = st.text_area("Your Answer / Submission", placeholder="Type your detailed answer here...")
+    student_submission = st.text_area("Your Text Answer / Notes (Optional if uploading file)", placeholder="Type your answer here or leave blank if uploading a document/image...")
+    uploaded_file = st.file_uploader("Upload Homework File (PDF, JPG, PNG)", type=["pdf", "png", "jpg", "jpeg"])
+    
     submit_evaluation = st.form_submit_button("Submit Answer for Evaluation 📋")
 
     if submit_evaluation:
@@ -664,23 +667,42 @@ with st.form("assignment_eval_form"):
             st.error("Client not initialized. Check your API key configuration.")
         elif not st.session_state.homework_prompt:
             st.warning("Please click 'Get Homework Task from Tutor' first to receive your assignment.")
-        elif not student_submission:
-            st.warning("Please provide your answer submission.")
+        elif not student_submission and not uploaded_file:
+            st.warning("Please provide a text answer or upload a homework file.")
         else:
-            with st.spinner("Evaluating student response..."):
+            with st.spinner("Evaluating student response and file contents..."):
                 try:
+                    contents_payload = []
                     eval_query = (
-                        f"Act as an expert professor evaluating a student submission for the topic '{st.session_state.current_topic}' in {selected_language}.\n\n"
+                        f"Act as an expert professor evaluating a student homework submission for the topic '{st.session_state.current_topic}' in {selected_language}.\n\n"
                         f"ASSIGNED TASK:\n{st.session_state.homework_prompt}\n\n"
-                        f"STUDENT'S SUBMISSION:\n{student_submission}\n\n"
+                    )
+                    if student_submission:
+                        eval_query += f"STUDENT'S TEXT SUBMISSION:\n{student_submission}\n\n"
+                    
+                    contents_payload.append(eval_query)
+
+                    if uploaded_file is not None:
+                        file_bytes = uploaded_file.read()
+                        file_mime = uploaded_file.type
+                        
+                        if "image" in file_mime:
+                            image_obj = Image.open(BytesIO(file_bytes))
+                            contents_payload.append(image_obj)
+                        elif "pdf" in file_mime:
+                            pdf_part = types.Part.from_bytes(data=file_bytes, mime_type="application/pdf")
+                            contents_payload.append(pdf_part)
+
+                    contents_payload.append(
                         "Provide a comprehensive evaluation structured as follows:\n"
                         "1. **Score / Grade**: (e.g., Score: 85/100 or Letter Grade A/B/C)\n"
-                        "2. **Executive Summary**: A brief overview of how well the student's answer addressed the task.\n"
+                        "2. **Executive Summary**: A brief overview of how well the student's submission addressed the task.\n"
                         "3. **Strengths**: What the student answered correctly or explained well.\n"
-                        "4. **Areas for Improvement**: Specific gaps, omissions, or conceptual inaccuracies in the answer.\n"
-                        "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how the student can improve their understanding."
+                        "4. **Areas for Improvement**: Specific gaps, omissions, or conceptual inaccuracies.\n"
+                        "5. **Constructive Feedback & Correct Guidance**: Actionable advice on how the student can improve."
                     )
-                    eval_response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', eval_query)
+
+                    eval_response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', contents_payload)
                     
                     st.markdown("---")
                     st.markdown("### 🏆 Evaluation Report")
