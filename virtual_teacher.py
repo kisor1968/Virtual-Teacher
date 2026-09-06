@@ -788,6 +788,7 @@ canvas_result = st_canvas(
     update_streamlit=True,
     height=350,
     drawing_mode="freedraw",
+    return_image_data=True,  # <--- Add this line here
     key="canvas",
 )
 
