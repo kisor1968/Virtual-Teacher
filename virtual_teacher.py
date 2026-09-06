@@ -792,32 +792,36 @@ canvas_result = st_canvas(
 )
 
 if st.button("Ask Professor to Analyze Drawing"):
-    if canvas_result.image_data is not None and "client" in st.session_state:
+    if "client" not in st.session_state:
+        st.error("Client not initialized. Check your API key configuration.")
+    elif canvas_result.json_data is not None and len(canvas_result.json_data.get("objects", [])) > 0:
         with st.spinner("Professor is analyzing your sketch..."):
             try:
-                img_array = canvas_result.image_data.astype(np.uint8)
-                success, encoded_img = cv2.imencode('.png', img_array)
-
-                if success:
-                    image_bytes = encoded_img.tobytes()
-                    image_obj = Image.open(BytesIO(image_bytes))
-
-                    drawing_prompt = [
-                        image_obj,
-                        f"Analyze this student's whiteboard drawing or handwritten formula regarding the topic '{st.session_state.get('current_topic', 'General Session')}'. "
-                        f"Provide constructive academic feedback, correct any errors, and explain the concept clearly in {selected_language}."
-                    ]
-
-                    response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', drawing_prompt)
-
-                    st.markdown("### 🧑‍🏫 Professor's Feedback on Your Sketch")
-                    st.markdown(response.text)
-                else:
-                    st.error("Failed to process the canvas image.")
+                img_data = canvas_result.image_data
+                if img_data is not None:
+                    img_array = img_data.astype(np.uint8)
+                    success, encoded_img = cv2.imencode('.png', img_array)
+                    
+                    if success:
+                        image_bytes = encoded_img.tobytes()
+                        image_obj = Image.open(BytesIO(image_bytes))
+                        
+                        drawing_prompt = [
+                            image_obj,
+                            f"Analyze this student's whiteboard drawing or handwritten formula regarding the topic '{st.session_state.get('current_topic', 'General Session')}'. "
+                            f"Provide constructive academic feedback, correct any errors, and explain the concept clearly in {selected_language}."
+                        ]
+                        
+                        response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', drawing_prompt)
+                        
+                        st.markdown("### 🧑‍🏫 Professor's Feedback on Your Sketch")
+                        st.markdown(response.text)
+                    else:
+                        st.error("Failed to process the canvas image.")
             except Exception as e:
                 st.error(f"Error analyzing whiteboard sketch: {e}")
     else:
-        st.warning("Please draw something on the canvas first or ensure your session is active.")
+        st.warning("Please draw something on the canvas first before requesting analysis.")
 # ==========================================
 # Vertical Section 3: Homework & Assignment Evaluator (Tutor-Assigned with File Upload)
 # ==========================================
