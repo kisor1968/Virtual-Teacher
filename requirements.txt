@@ -8,3 +8,5 @@ numpy
 scipy
 streamlit-drawable-canvas
 opencv-python-headless
+Pillow
+google-generativeai
