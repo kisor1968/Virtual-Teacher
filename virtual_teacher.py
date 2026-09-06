@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special as sp
 from PIL import Image
+from streamlit_drawable_canvas import st_canvas
+import cv2
 
 # ==========================================
 # 1. Page Configuration (MUST be first Streamlit command)
@@ -767,7 +769,55 @@ if st.session_state.messages:
                             st.error(f"**Q{q_idx+1}:** Incorrect. You chose '{selected}', but the correct answer is '{correct}'.")
                 
                 st.info(f"**Final Score: {score} / {len(st.session_state.quiz_data)}**")
+# ==========================================
+# Interactive Whiteboard Section
+# ==========================================
+st.markdown("---")
+st.subheader("🎨 Interactive Whiteboard & Sketchpad")
+st.markdown("Draw diagrams, geometric shapes, or handwritten equations for the AI professor to review.")
 
+stroke_width = st.slider("Stroke Width", 1, 25, 3)
+stroke_color = st.color_picker("Stroke Color", "#000000")
+bg_color = st.color_picker("Background Color", "#ffffff")
+
+canvas_result = st_canvas(
+    fill_color="rgba(255, 165, 0, 0.3)",
+    stroke_width=stroke_width,
+    stroke_color=stroke_color,
+    background_color=bg_color,
+    update_streamlit=True,
+    height=350,
+    drawing_mode="freedraw",
+    key="canvas",
+)
+
+if st.button("Ask Professor to Analyze Drawing"):
+    if canvas_result.image_data is not None and "client" in st.session_state:
+        with st.spinner("Professor is analyzing your sketch..."):
+            try:
+                img_array = canvas_result.image_data.astype(np.uint8)
+                success, encoded_img = cv2.imencode('.png', img_array)
+
+                if success:
+                    image_bytes = encoded_img.tobytes()
+                    image_obj = Image.open(BytesIO(image_bytes))
+
+                    drawing_prompt = [
+                        image_obj,
+                        f"Analyze this student's whiteboard drawing or handwritten formula regarding the topic '{st.session_state.get('current_topic', 'General Session')}'. "
+                        f"Provide constructive academic feedback, correct any errors, and explain the concept clearly in {selected_language}."
+                    ]
+
+                    response = safe_generate_content(st.session_state.client, 'gemini-3.6-flash', drawing_prompt)
+
+                    st.markdown("### 🧑‍🏫 Professor's Feedback on Your Sketch")
+                    st.markdown(response.text)
+                else:
+                    st.error("Failed to process the canvas image.")
+            except Exception as e:
+                st.error(f"Error analyzing whiteboard sketch: {e}")
+    else:
+        st.warning("Please draw something on the canvas first or ensure your session is active.")
 # ==========================================
 # Vertical Section 3: Homework & Assignment Evaluator (Tutor-Assigned with File Upload)
 # ==========================================
