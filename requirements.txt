@@ -10,3 +10,5 @@ streamlit-drawable-canvas
 opencv-python-headless
 Pillow
 google-generativeai
+streamlit>=1.30.0
+
