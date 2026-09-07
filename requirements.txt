@@ -6,7 +6,7 @@ plotly
 matplotlib
 numpy
 scipy
-streamlit-drawable-canvas
+streamlit-drawable-canvas-fix
 opencv-python-headless
 Pillow
 google-generativeai
