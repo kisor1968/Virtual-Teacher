@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special as sp
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
+from streamlit_drawable_canvas_fix import st_canvas
 
 # ==========================================
 # 1. Page Configuration (MUST be first Streamlit command)
