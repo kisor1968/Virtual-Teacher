@@ -1,4 +1,9 @@
 streamlit>=1.40.0
+google-genai
+gtts
+plotly
+matplotlib
+numpy
+scipy
 Pillow>=11.0.0
-pandas>=2.0.0
-numpy>=1.26.0
+streamlit-drawable-canvas
