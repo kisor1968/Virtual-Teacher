@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special as sp
 from PIL import Image
-from streamlit_drawable_canvas_fix import st_canvas
+from streamlit_drawable_canvas import st_canvas
 
 # ==========================================
 # 1. Page Configuration (MUST be first Streamlit command)
@@ -529,10 +529,6 @@ if "homework_prompt" not in st.session_state:
     st.session_state.homework_prompt = ""
 if "flashcards_data" not in st.session_state:
     st.session_state.flashcards_data = None
-if "canvas_objects" not in st.session_state:
-    st.session_state.canvas_objects = []
-if "canvas_image_data" not in st.session_state:
-    st.session_state.canvas_image_data = None
 
 # ==========================================
 # Main App Layout
@@ -670,7 +666,7 @@ if st.session_state.messages:
                     st.error(f"Error generating response (Quota / Rate limit reached): {e}")
 
 # ==========================================
-# Interactive Whiteboard Section
+# New Addition: Interactive Whiteboard Section
 # ==========================================
 st.markdown("---")
 st.subheader("🎨 Interactive Whiteboard")
@@ -685,63 +681,15 @@ with col_wb1:
 
 with col_wb2:
     canvas_result = st_canvas(
-        fill_color="#0288d1",
+        fill_color="rgba(2, 136, 209, 0.3)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_color=bg_color,
         update_streamlit=True,
-        realtime_update=True,
-        return_image_data=True,
-        width=650,
         height=380,
         drawing_mode=drawing_mode,
         key="canvas",
     )
-
-# Persist canvas drawings safely in session state to prevent loss/errors on button clicks
-if canvas_result is not None:
-    if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
-        st.session_state.canvas_objects = canvas_result.json_data["objects"]
-    try:
-        if canvas_result.image_data is not None:
-            st.session_state.canvas_image_data = canvas_result.image_data
-    except Exception:
-        pass
-
-# Button to Analyze Whiteboard Drawing
-if st.button("Ask professor to analyse drawing"):
-    if "client" not in st.session_state:
-        st.error("Client not initialized. Check your API key configuration.")
-    else:
-        try:
-            with st.spinner("Professor is analyzing your whiteboard drawing..."):
-                img_data = st.session_state.get("canvas_image_data")
-                if img_data is not None:
-                    pil_img = Image.fromarray(img_data.astype("uint8"), mode="RGBA").convert("RGB")
-                else:
-                    pil_img = Image.new("RGB", (650, 380), color="white")
-                
-                analysis_prompt = [
-                    pil_img,
-                    f"Analyze this drawing created on the interactive whiteboard for the current lesson topic '{st.session_state.current_topic or 'General Lesson'}'. Explain what the student has sketched, check for any corrections or insights, and provide a thorough professor evaluation in {selected_language}."
-                ]
-                
-                chat_response = safe_chat_send_message(st.session_state.chat_history, analysis_prompt)
-                bot_reply = chat_response.text
-                
-                drawing_label = "🎨 [Whiteboard Drawing Submission]"
-                st.session_state.messages.append({"role": "user", "content": drawing_label, "plot_query": None})
-                st.session_state.transcript_log.append({"role": "Student", "content": drawing_label})
-                
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": bot_reply, 
-                    "plot_query": None
-                })
-                st.session_state.transcript_log.append({"role": "Professor", "content": bot_reply})
-                st.rerun()
-        except Exception as e:
-            st.error(f"Error analyzing whiteboard drawing: {e}")
 
 # ==========================================
 # Vertical Section 1: Automated Summary & Flashcard Generator
