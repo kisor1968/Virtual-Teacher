@@ -690,40 +690,37 @@ with col_wb2:
         stroke_color=stroke_color,
         background_color=bg_color,
         update_streamlit=True,
+        width=650,
         height=380,
         drawing_mode=drawing_mode,
         key="canvas",
     )
 
-# Persist canvas drawings safely in session state to prevent loss/RuntimeError on button clicks
+# Safely capture objects and image data whenever canvas updates
 if canvas_result is not None:
     if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
         st.session_state.canvas_objects = canvas_result.json_data["objects"]
-        try:
-            if canvas_result.image_data is not None:
-                st.session_state.canvas_image_data = canvas_result.image_data
-        except Exception:
-            pass
+    if canvas_result.image_data is not None:
+        st.session_state.canvas_image_data = canvas_result.image_data
 
 # Button to Analyze Whiteboard Drawing
 if st.button("Ask professor to analyse drawing"):
     if "client" not in st.session_state:
         st.error("Client not initialized. Check your API key configuration.")
-    elif not st.session_state.get("canvas_objects"):
-        st.warning("Please draw something on the whiteboard before asking the professor to analyze it.")
     else:
         try:
             with st.spinner("Professor is analyzing your whiteboard drawing..."):
                 img_data = st.session_state.get("canvas_image_data")
+                
                 if img_data is not None:
-                    img_array = img_data.astype(np.uint8)
-                    pil_img = Image.fromarray(img_array)
+                    # Convert canvas array to a clean PIL image
+                    pil_img = Image.fromarray(img_data.astype("uint8"), mode="RGBA").convert("RGB")
                 else:
-                    pil_img = Image.new("RGB", (700, 380), color="white")
+                    pil_img = Image.new("RGB", (650, 380), color="white")
                 
                 analysis_prompt = [
                     pil_img,
-                    f"Analyze this drawing created on the interactive whiteboard for the current lesson topic '{st.session_state.current_topic}'. Explain what the student has sketched, check for any corrections or insights, and provide a thorough professor evaluation in {selected_language}."
+                    f"Analyze this drawing created on the interactive whiteboard for the current lesson topic '{st.session_state.current_topic or 'General Lesson'}'. Explain what the student has sketched, check for any corrections or insights, and provide a thorough professor evaluation in {selected_language}."
                 ]
                 
                 chat_response = safe_chat_send_message(st.session_state.chat_history, analysis_prompt)
