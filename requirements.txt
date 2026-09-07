@@ -8,5 +8,5 @@ matplotlib
 numpy
 scipy
 opencv-python-headless
-Pillow
+Pillow>=11.0.0
 streamlit-drawable-canvas==0.9.3
